@@ -4,10 +4,14 @@ using UnityEngine;
 
 public enum ELine
 {
-    Column,
-    Row,
-    Diagonal_1,
-    Diagonal_2,
+    Up,         // ↑
+    Diagonal_1, // ↗
+    Right,      // →
+    Diagonal_2, // ↘
+    Down,       // ↓
+    Diagonal_3, // ↙
+    Left,       // ←
+    Diagonal_4, // ↖
     Max,
 }
 
@@ -105,12 +109,12 @@ public class Gomoku : MonoBehaviour
 
                     // Piece 컴포넌트를 가져온다. 컴포넌트가 없다면 생성한다.
                     var piece = go.GetComponent<Piece>() ?? go.AddComponent<Piece>();
-                    piece.SetPieceImage((EPiece)CurrentTurn);
+                    piece.SetPieceData((EPiece)CurrentTurn);
 
                     // 게임의 끝났는지 결정한다.
                     if(TestWinner(gridIndex) == true)
                     {
-
+                        Debug.Log("Game End");
                         return;
                     }
 
@@ -146,10 +150,10 @@ public class Gomoku : MonoBehaviour
         if(CurrentTurn == Black)
         {
             // 6목 착수 방지
-            for (int i = 0; i < (int)ELine.Max; i++)
+            for (int i = 0; i < (int)ELine.Max / 2; i++)
             {
-                // 붙은 돌의 갯수가 6개인 경우 6목이다.
-                if (GetClosePieceCount(index, (ELine)i) == 6)
+                // 붙은 돌의 갯수가 5개가 넘는다면 착수가 불가능하다.
+                if (GetPieceCount(index, CurrentTurn, (ELine)i) > 5)
                     return false;
             }
 
@@ -158,7 +162,7 @@ public class Gomoku : MonoBehaviour
             for (int i = 0; i < (int)ELine.Max; i++)
             {
                 // 각 라인의 열린 돌의 갯수 파악
-                int count = GetOpenPieceCount(index, (ELine)i);
+                int count = GetPieceCountAllowEmpty(index, CurrentTurn, (ELine)i);
 
                 // 43은 되지만 33, 44는 방지한다.
                 if(count >= 3 && count <= 4)
@@ -173,22 +177,77 @@ public class Gomoku : MonoBehaviour
 
     private bool TestWinner(int index)
     {
-        for (int i = 0; i < (int)ELine.Max; i++)
+        for (int i = 0; i < (int)ELine.Max / 2; i++)
         {
             // 붙어서 5개가 만들어진다면 승리이다.
-            if (GetClosePieceCount(index, (ELine)i) == 5)
+            if (GetPieceCount(index, CurrentTurn, (ELine)i) == 5)
                 return true;
         }
         return false;
     }
 
-    private int GetClosePieceCount(int index, ELine line)
+    private int GetPieceCount(int index, int currentTurn, ELine line)
+    {
+        int count = 1;
+        switch (line)
+        {
+            case ELine.Up:
+            case ELine.Down:
+                count += GetPieceCount(index, currentTurn, -gridCounts.x, false);
+                count += GetPieceCount(index, currentTurn, gridCounts.x, false);
+                break;
+            case ELine.Diagonal_1:
+            case ELine.Diagonal_3:
+                count += GetPieceCount(index, currentTurn, -gridCounts.x+1, false);
+                count += GetPieceCount(index, currentTurn, gridCounts.x-1, false);
+                break;
+            case ELine.Right:
+            case ELine.Left:
+                count += GetPieceCount(index, currentTurn, -1, false);
+                count += GetPieceCount(index, currentTurn, 1, false);
+                break;
+            case ELine.Diagonal_2:
+            case ELine.Diagonal_4:
+                count += GetPieceCount(index, currentTurn, -gridCounts.x - 1, false);
+                count += GetPieceCount(index, currentTurn, gridCounts.x + 1, false);
+                break;
+            default:
+                break;
+        }
+        return count;
+    }
+
+    private int GetPieceCountAllowEmpty(int index, int currentTurn, ELine line)
     {
         return 0;
     }
 
-    private int GetOpenPieceCount(int index, ELine line)
+    private int GetPieceCount(int index, int currentTurn, int sequential, bool allowEmpty)
     {
-        return 0;
+        int count = 0;
+        int currentIndex = index + sequential;
+        while (IsValidIndex(currentIndex))
+        {
+            // 빈 공간이다.
+            if (pieceList.ContainsKey(currentIndex) == false)
+            {
+                // 빈 공간을 허용한다면 한 번은 넘어간다.
+                if (allowEmpty) allowEmpty = false;
+                else break;
+            }
+
+            // 상대 오목알이 나오면 즉시 멈춘다.
+            if (pieceList[currentIndex].PieceType != (EPiece)currentTurn)
+                break;
+
+            count++;
+            currentIndex += sequential;
+        }
+        return count;
+    }
+
+    private bool IsValidIndex(int index)
+    {
+        return index >= 0 && index < (gridCounts.x * gridCounts.y);
     }
 }
