@@ -2,6 +2,15 @@
 using System.Collections.Generic;
 using UnityEngine;
 
+public enum ELine
+{
+    Column,
+    Row,
+    Diagonal_1,
+    Diagonal_2,
+    Max,
+}
+
 public class Gomoku : MonoBehaviour
 {
     public float emptySpace = 0.71f;
@@ -20,6 +29,11 @@ public class Gomoku : MonoBehaviour
         set { _currentTurn = value % 2; }
     }
     private int _currentTurn = 0;
+
+    #region const variable
+    private const int Black = 0;
+    private const int White = 1;
+    #endregion
 
     void Awake()
     {
@@ -55,10 +69,10 @@ public class Gomoku : MonoBehaviour
         RaycastHit hit;
         if (Physics.Raycast(ray, out hit))
         {
-            // Try to check that it is gomoku board.
+            // Raycast한 대상이 오목판인지 체크한다.
             if (hit.collider != null && hit.collider.name.Equals(name))
             {
-                // Find the nearest grid
+                // 가까운 그리드 지점을 찾는다.
                 CanPlace canPlace = (float value, out float output) => {
                     var temp = value % emptySpace;
                     if (temp > (emptySpace / 2)) temp -= emptySpace;
@@ -69,37 +83,41 @@ public class Gomoku : MonoBehaviour
 
                 Vector3 gridPosition = new Vector3(0, 0, -0.2f);
 
-                // Check to find grid that place gomoku piece.
+                // Raycast 히트 지점이 오목알을 놓을수 있는 위치인지 체크한다.
                 if (canPlace(hit.point.x, out gridPosition.x) && canPlace(hit.point.y, out gridPosition.y))
                 {
-                    // Set position from grid
+                    // 그리드에 맞춰 위치벡터 값을 수정한다.
                     gridPosition.x = hit.point.x - gridPosition.x;
                     gridPosition.y = hit.point.y - gridPosition.y;
 
-                    // Get index from grid position
+                    // 그리드 위치로부터 인덱스를 구한다.
                     int gridIndex = GetPieceIndexFromPosition(gridPosition);
                     if (pieceList.ContainsKey(gridIndex))
                         return;
 
-                    // Prevent place piece that break the rule.
-                    if (TestCanPlace() == false)
+                    // 규칙에 의해 놓을수 없는 지점인지 체크한다.
+                    if (TestCanPlace(gridIndex) == false)
                         return;
 
-                    // Create the piece at grid.
+                    // 그리드에 맞춰 오목알을 생성한다.
                     var go = Instantiate(piecePrefab, gridPosition, Quaternion.identity, transform);
                     go.transform.localScale = transform.worldToLocalMatrix.MultiplyPoint(new Vector3(0.6f, 0.6f, 0.3f));
 
-                    // Set piece information.
+                    // Piece 컴포넌트를 가져온다. 컴포넌트가 없다면 생성한다.
                     var piece = go.GetComponent<Piece>() ?? go.AddComponent<Piece>();
                     piece.SetPieceImage((EPiece)CurrentTurn);
 
-                    // Decision the game end
-                    TestWinner();
+                    // 게임의 끝났는지 결정한다.
+                    if(TestWinner(gridIndex) == true)
+                    {
 
-                    // Set next turn
+                        return;
+                    }
+
+                    // 턴을 넘긴다.
                     CurrentTurn++;
 
-                    // store the index and piece data
+                    // 인덱스로부터 Piece 정보를 저장한다.
                     pieceList.Add(gridIndex, piece);
                 }
             }
@@ -107,9 +125,9 @@ public class Gomoku : MonoBehaviour
     }
 
     /// <summary>
-    /// Left Top will be returned zero. increase one when column is increased. increase column count when row is increased.
+    /// 왼쪽 위를 기준으로 오른쪽으로 갈수록 1씩 증가하고 아래쪽으로 갈수록 열의 갯수 만큼 증가한다.
     /// </summary>
-    /// <param name="position"></param>
+    /// <param name="position">인덱스를 가져올 그리드 위치</param>
     /// <returns></returns>
     private int GetPieceIndexFromPosition(Vector3 position)
     {
@@ -122,13 +140,55 @@ public class Gomoku : MonoBehaviour
         return y * gridCounts.x + x;
     }
 
-    private bool TestCanPlace()
+    private bool TestCanPlace(int index)
     {
+        // 렌주룰에 따르면 흑은 33, 44, 6목에 착수가 불가능하다.
+        if(CurrentTurn == Black)
+        {
+            // 6목 착수 방지
+            for (int i = 0; i < (int)ELine.Max; i++)
+            {
+                // 붙은 돌의 갯수가 6개인 경우 6목이다.
+                if (GetClosePieceCount(index, (ELine)i) == 6)
+                    return false;
+            }
+
+            // 0 = 33체크, 1 = 44체크
+            bool[] disallowPlace = new bool[2] { false, false };
+            for (int i = 0; i < (int)ELine.Max; i++)
+            {
+                // 각 라인의 열린 돌의 갯수 파악
+                int count = GetOpenPieceCount(index, (ELine)i);
+
+                // 43은 되지만 33, 44는 방지한다.
+                if(count >= 3 && count <= 4)
+                {
+                    if (disallowPlace[count-3]) return false;
+                    disallowPlace[count-3] = true;
+                }
+            }
+        }
         return true;
     }
 
-    private void TestWinner()
+    private bool TestWinner(int index)
     {
+        for (int i = 0; i < (int)ELine.Max; i++)
+        {
+            // 붙어서 5개가 만들어진다면 승리이다.
+            if (GetClosePieceCount(index, (ELine)i) == 5)
+                return true;
+        }
+        return false;
+    }
 
+    private int GetClosePieceCount(int index, ELine line)
+    {
+        return 0;
+    }
+
+    private int GetOpenPieceCount(int index, ELine line)
+    {
+        return 0;
     }
 }
