@@ -9,12 +9,16 @@ public class Gomoku : MonoBehaviour
     public Vector2Int gridCounts = new Vector2Int(15, 15);
     public GameObject piecePrefab;
 
+    public Dictionary<int, Piece> pieceList;
+
     private bool _enable = true;
 
     void Awake()
     {
         if (piecePrefab == null)
             _enable = false;
+
+        pieceList = new Dictionary<int, Piece>();
     }
 
     // Start is called before the first frame update
@@ -64,6 +68,10 @@ public class Gomoku : MonoBehaviour
                     gridPosition.x = hit.point.x - gridPosition.x;
                     gridPosition.y = hit.point.y - gridPosition.y;
 
+                    int gridIndex = GetPieceIndexFromPosition(gridPosition);
+                    if (pieceList.ContainsKey(gridIndex))
+                        return;
+
                     // Create the piece at grid.
                     var go = Instantiate(piecePrefab, gridPosition, Quaternion.identity, transform);
                     go.transform.localScale = transform.worldToLocalMatrix.MultiplyPoint(new Vector3(0.6f, 0.6f, 0.3f));
@@ -71,8 +79,26 @@ public class Gomoku : MonoBehaviour
                     // Set Piece Information
                     var piece = go.GetComponent<Piece>() ?? go.AddComponent<Piece>();
                     piece.SetPieceImage((EPiece)Random.Range(0, 2));
+
+                    pieceList.Add(gridIndex, piece);
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// Left Top will be returned zero. increase one when column is increased. increase column count when row is increased.
+    /// </summary>
+    /// <param name="position"></param>
+    /// <returns></returns>
+    private int GetPieceIndexFromPosition(Vector3 position)
+    {
+        position.x += (gridCounts.x / 2) * emptySpace;
+        position.y += (gridCounts.y / 2) * emptySpace;
+
+        int x = Mathf.RoundToInt(position.x / emptySpace);
+        int y = gridCounts.y - Mathf.RoundToInt(position.y / emptySpace) - 1;
+        
+        return y * gridCounts.x + x;
     }
 }
