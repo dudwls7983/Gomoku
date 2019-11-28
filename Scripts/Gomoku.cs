@@ -13,6 +13,14 @@ public class Gomoku : MonoBehaviour
 
     private bool _enable = true;
 
+    [HideInInspector]
+    public int CurrentTurn
+    {
+        get { return _currentTurn; }
+        set { _currentTurn = value % 2; }
+    }
+    private int _currentTurn = 0;
+
     void Awake()
     {
         if (piecePrefab == null)
@@ -24,7 +32,7 @@ public class Gomoku : MonoBehaviour
     // Start is called before the first frame update
     void Start()
     {
-        
+        CurrentTurn = 0;
     }
 
 
@@ -68,18 +76,30 @@ public class Gomoku : MonoBehaviour
                     gridPosition.x = hit.point.x - gridPosition.x;
                     gridPosition.y = hit.point.y - gridPosition.y;
 
+                    // Get index from grid position
                     int gridIndex = GetPieceIndexFromPosition(gridPosition);
                     if (pieceList.ContainsKey(gridIndex))
+                        return;
+
+                    // Prevent place piece that break the rule.
+                    if (TestCanPlace() == false)
                         return;
 
                     // Create the piece at grid.
                     var go = Instantiate(piecePrefab, gridPosition, Quaternion.identity, transform);
                     go.transform.localScale = transform.worldToLocalMatrix.MultiplyPoint(new Vector3(0.6f, 0.6f, 0.3f));
 
-                    // Set Piece Information
+                    // Set piece information.
                     var piece = go.GetComponent<Piece>() ?? go.AddComponent<Piece>();
-                    piece.SetPieceImage((EPiece)Random.Range(0, 2));
+                    piece.SetPieceImage((EPiece)CurrentTurn);
 
+                    // Decision the game end
+                    TestWinner();
+
+                    // Set next turn
+                    CurrentTurn++;
+
+                    // store the index and piece data
                     pieceList.Add(gridIndex, piece);
                 }
             }
@@ -100,5 +120,15 @@ public class Gomoku : MonoBehaviour
         int y = gridCounts.y - Mathf.RoundToInt(position.y / emptySpace) - 1;
         
         return y * gridCounts.x + x;
+    }
+
+    private bool TestCanPlace()
+    {
+        return true;
+    }
+
+    private void TestWinner()
+    {
+
     }
 }
