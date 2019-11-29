@@ -13,9 +13,12 @@ public class Piece : MonoBehaviour
     public Material blackPieceMaterial;
     public Material whitePieceMaterial;
 
+    [HideInInspector]
+    public EPiece PieceType { get; private set; }
+
     private MeshRenderer _renderer;
     // Start is called before the first frame update
-    void Start()
+    void Awake()
     {
         _renderer = GetComponent<MeshRenderer>();
     }
@@ -26,7 +29,7 @@ public class Piece : MonoBehaviour
         
     }
 
-    public void SetPieceImage(EPiece pieceType)
+    public void SetPieceData(EPiece pieceType)
     {
         if (_renderer == null)
             return;
@@ -40,5 +43,6 @@ public class Piece : MonoBehaviour
                 _renderer.material = whitePieceMaterial;
                 break;
         }
+        PieceType = pieceType;
     }
 }
