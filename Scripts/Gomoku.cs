@@ -4,9 +4,9 @@ using UnityEngine;
 
 public enum ELine
 {
-    UpDown,         // ↑↓
+    UpDown,     // ↑↓
     Diagonal_1, // ↗↙
-    LeftRight,      // ←→
+    LeftRight,  // ←→
     Diagonal_2, // ↘↖
     Max,
 }
@@ -18,9 +18,36 @@ public class Gomoku : MonoBehaviour
     public Vector2Int gridCounts = new Vector2Int(15, 15);
     public GameObject piecePrefab;
 
+    [SerializeField] private GomokuAgent blackAgent = null;
+    [SerializeField] private GomokuAgent whiteAgent = null;
+
     public Dictionary<int, Piece> pieceList;
 
     private bool _enable = true;
+
+    public static Gomoku Instance
+    {
+        get
+        {
+            if(_instance == null)
+            {
+                var go = new GameObject();
+                _instance = go.AddComponent<Gomoku>();
+            }
+            return _instance;
+        }
+        set
+        {
+            if(_instance != null)
+            {
+                Destroy(value.gameObject);
+                return;
+            }
+            _instance = value;
+            DontDestroyOnLoad(_instance);
+        }
+    }
+    private static Gomoku _instance = null;
 
     [HideInInspector]
     public int CurrentTurn
@@ -41,12 +68,14 @@ public class Gomoku : MonoBehaviour
             _enable = false;
 
         pieceList = new Dictionary<int, Piece>();
+        Instance = this;
     }
 
     // Start is called before the first frame update
     void Start()
     {
         CurrentTurn = 0;
+        blackAgent.RequestDecision();
     }
 
 
@@ -98,30 +127,85 @@ public class Gomoku : MonoBehaviour
                     // 규칙에 의해 놓을수 없는 지점인지 체크한다.
                     if (TestCanPlace(gridIndex) == false)
                         return;
-
-                    // 그리드에 맞춰 오목알을 생성한다.
-                    var go = Instantiate(piecePrefab, gridPosition, Quaternion.identity, transform);
-                    go.transform.localScale = transform.worldToLocalMatrix.MultiplyPoint(new Vector3(0.6f, 0.6f, 0.3f));
-
-                    // Piece 컴포넌트를 가져온다. 컴포넌트가 없다면 생성한다.
-                    var piece = go.GetComponent<Piece>() ?? go.AddComponent<Piece>();
-                    piece.SetPieceData((EPiece)CurrentTurn);
-
+                    
                     // 게임의 끝났는지 결정한다.
-                    if(TestWinner(gridIndex, CurrentTurn) == true)
+                    if(PlacePeace(gridIndex) == true)
                     {
                         Debug.Log("Game End");
                         return;
                     }
-
-                    // 턴을 넘긴다.
-                    CurrentTurn++;
-
-                    // 인덱스로부터 Piece 정보를 저장한다.
-                    pieceList.Add(gridIndex, piece);
                 }
             }
         }
+    }
+
+    public bool PlacePeace(int index)
+    {
+        Vector3 gridPosition = new Vector3(((index % gridCounts.x) - (gridCounts.x / 2)) * emptySpace, ((gridCounts.y / 2) - (index / gridCounts.y)) * emptySpace, -0.2f);
+
+        var go = Instantiate(piecePrefab, gridPosition, Quaternion.identity, transform);
+        go.transform.localScale = transform.worldToLocalMatrix.MultiplyPoint(new Vector3(0.6f, 0.6f, 0.3f));
+
+        // Piece 컴포넌트를 가져온다. 컴포넌트가 없다면 생성한다.
+        var piece = go.GetComponent<Piece>() ?? go.AddComponent<Piece>();
+        piece.SetPieceData((EPiece)CurrentTurn);
+
+        // 턴을 넘긴다.
+        CurrentTurn++;
+
+        // 인덱스로부터 Piece 정보를 저장한다.
+        pieceList.Add(index, piece);
+
+        return TestWinner(index, CurrentTurn);
+    }
+
+    public bool TestCanPlace(int index)
+    {
+        float reward;
+        return TestCanPlace(index, out reward);
+    }
+
+    public bool TestCanPlace(int index, out float reward)
+    {
+        reward = 0f;
+        // 렌주룰에 따르면 흑은 33, 44, 6목에 착수가 불가능하다.
+        if (CurrentTurn == Black)
+        {
+            // 6목 착수 방지
+            for (int i = 0; i < (int)ELine.Max; i++)
+            {
+                // 붙은 돌의 갯수가 5개가 넘는다면 착수가 불가능하다.
+                if (GetPieceCount(index, CurrentTurn, (ELine)i) > 5)
+                    return false;
+            }
+
+            // 0 = 33체크, 1 = 44체크
+            bool[] disallowPlace = new bool[2] { false, false };
+            for (int i = 0; i < (int)ELine.Max; i++)
+            {
+                // 각 라인의 열린 돌의 갯수 파악
+                int count = GetPieceCountAllowEmpty(index, CurrentTurn, (ELine)i);
+                reward = 0.1f * count;
+
+                // 43은 되지만 33, 44는 방지한다.
+                if (count >= 3 && count <= 4)
+                {
+                    if (disallowPlace[count - 3]) return false;
+                    disallowPlace[count - 3] = true;
+                }
+            }
+        }
+        return true;
+    }
+
+    public void RestartBoard()
+    {
+        foreach (var gameObject in pieceList.Values)
+        {
+            Destroy(gameObject.gameObject);
+        }
+        pieceList.Clear();
+        CurrentTurn = Black;
     }
 
     /// <summary>
@@ -140,42 +224,12 @@ public class Gomoku : MonoBehaviour
         return y * gridCounts.x + x;
     }
 
-    private bool TestCanPlace(int index)
-    {
-        // 렌주룰에 따르면 흑은 33, 44, 6목에 착수가 불가능하다.
-        if(CurrentTurn == Black)
-        {
-            // 6목 착수 방지
-            for (int i = 0; i < (int)ELine.Max; i++)
-            {
-                // 붙은 돌의 갯수가 5개가 넘는다면 착수가 불가능하다.
-                if (GetPieceCount(index, CurrentTurn, (ELine)i) > 5)
-                    return false;
-            }
-
-            // 0 = 33체크, 1 = 44체크
-            bool[] disallowPlace = new bool[2] { false, false };
-            for (int i = 0; i < (int)ELine.Max; i++)
-            {
-                // 각 라인의 열린 돌의 갯수 파악
-                int count = GetPieceCountAllowEmpty(index, CurrentTurn, (ELine)i);
-
-                // 43은 되지만 33, 44는 방지한다.
-                if(count >= 3 && count <= 4)
-                {
-                    if (disallowPlace[count-3]) return false;
-                    disallowPlace[count-3] = true;
-                }
-            }
-        }
-        return true;
-    }
-
     private bool TestWinner(int index, int currentTurn)
     {
         for (int i = 0; i < (int)ELine.Max; i++)
         {
             int count = GetPieceCount(index, CurrentTurn, (ELine)i);
+
             // 붙어서 5개가 만들어진다면 승리이다.
             if (count == 5)
                 return true;
@@ -263,7 +317,7 @@ public class Gomoku : MonoBehaviour
             if (pieceList.ContainsKey(currentIndex) == false)
             {
                 // 빈 공간을 허용 안 한다면 바로 값을 반환한다.
-                if (allowEmpty == false) break;
+                if (allowEmpty == false) return count;
                 
                 // 빈 공간을 허용 한다면 한 번은 넘어간다.
                 allowEmpty = false;
@@ -271,13 +325,17 @@ public class Gomoku : MonoBehaviour
                 continue;
             }
 
-            // 상대 오목알이 나오면 즉시 멈춘다.
+            // 상대 오목알이 나오면 닫힌 돌이다.
             if (pieceList[currentIndex].PieceType != (EPiece)currentTurn)
-                break;
+                return count;
 
             count++;
             currentIndex += sequential;
         }
+
+        if (IsValidIndex(currentIndex) == false)
+            count--;
+
         return count;
     }
 
