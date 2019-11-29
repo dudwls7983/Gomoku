@@ -4,14 +4,10 @@ using UnityEngine;
 
 public enum ELine
 {
-    Up,         // ↑
-    Diagonal_1, // ↗
-    Right,      // →
-    Diagonal_2, // ↘
-    Down,       // ↓
-    Diagonal_3, // ↙
-    Left,       // ←
-    Diagonal_4, // ↖
+    UpDown,         // ↑↓
+    Diagonal_1, // ↗↙
+    LeftRight,      // ←→
+    Diagonal_2, // ↘↖
     Max,
 }
 
@@ -112,7 +108,7 @@ public class Gomoku : MonoBehaviour
                     piece.SetPieceData((EPiece)CurrentTurn);
 
                     // 게임의 끝났는지 결정한다.
-                    if(TestWinner(gridIndex) == true)
+                    if(TestWinner(gridIndex, CurrentTurn) == true)
                     {
                         Debug.Log("Game End");
                         return;
@@ -150,7 +146,7 @@ public class Gomoku : MonoBehaviour
         if(CurrentTurn == Black)
         {
             // 6목 착수 방지
-            for (int i = 0; i < (int)ELine.Max / 2; i++)
+            for (int i = 0; i < (int)ELine.Max; i++)
             {
                 // 붙은 돌의 갯수가 5개가 넘는다면 착수가 불가능하다.
                 if (GetPieceCount(index, CurrentTurn, (ELine)i) > 5)
@@ -175,12 +171,17 @@ public class Gomoku : MonoBehaviour
         return true;
     }
 
-    private bool TestWinner(int index)
+    private bool TestWinner(int index, int currentTurn)
     {
-        for (int i = 0; i < (int)ELine.Max / 2; i++)
+        for (int i = 0; i < (int)ELine.Max; i++)
         {
+            int count = GetPieceCount(index, CurrentTurn, (ELine)i);
             // 붙어서 5개가 만들어진다면 승리이다.
-            if (GetPieceCount(index, CurrentTurn, (ELine)i) == 5)
+            if (count == 5)
+                return true;
+
+            // 흰색은 5개가 넘어도 승리이다.
+            if (currentTurn == White && count > 5)
                 return true;
         }
         return false;
@@ -191,27 +192,21 @@ public class Gomoku : MonoBehaviour
         int count = 1;
         switch (line)
         {
-            case ELine.Up:
-            case ELine.Down:
+            case ELine.UpDown:
                 count += GetPieceCount(index, currentTurn, -gridCounts.x, false);
                 count += GetPieceCount(index, currentTurn, gridCounts.x, false);
                 break;
             case ELine.Diagonal_1:
-            case ELine.Diagonal_3:
                 count += GetPieceCount(index, currentTurn, -gridCounts.x+1, false);
                 count += GetPieceCount(index, currentTurn, gridCounts.x-1, false);
                 break;
-            case ELine.Right:
-            case ELine.Left:
-                count += GetPieceCount(index, currentTurn, -1, false);
+            case ELine.LeftRight:
                 count += GetPieceCount(index, currentTurn, 1, false);
+                count += GetPieceCount(index, currentTurn, -1, false);
                 break;
             case ELine.Diagonal_2:
-            case ELine.Diagonal_4:
-                count += GetPieceCount(index, currentTurn, -gridCounts.x - 1, false);
                 count += GetPieceCount(index, currentTurn, gridCounts.x + 1, false);
-                break;
-            default:
+                count += GetPieceCount(index, currentTurn, -gridCounts.x - 1, false);
                 break;
         }
         return count;
@@ -219,7 +214,43 @@ public class Gomoku : MonoBehaviour
 
     private int GetPieceCountAllowEmpty(int index, int currentTurn, ELine line)
     {
-        return 0;
+        int tempCount1, tempCount2;
+        switch (line)
+        {
+            case ELine.UpDown:
+                tempCount1 = GetPieceCount(index, currentTurn, -gridCounts.x, true);
+                tempCount1 += GetPieceCount(index, currentTurn, gridCounts.x, false);
+
+                tempCount2 = GetPieceCount(index, currentTurn, -gridCounts.x, false);
+                tempCount2 += GetPieceCount(index, currentTurn, gridCounts.x, true);
+                break;
+            case ELine.Diagonal_1:
+                tempCount1 = GetPieceCount(index, currentTurn, -gridCounts.x + 1, true);
+                tempCount1 += GetPieceCount(index, currentTurn, gridCounts.x - 1, false);
+
+                tempCount2 = GetPieceCount(index, currentTurn, -gridCounts.x + 1, false);
+                tempCount2 += GetPieceCount(index, currentTurn, gridCounts.x - 1, true);
+                break;
+            case ELine.LeftRight:
+                tempCount1 = GetPieceCount(index, currentTurn, 1, false);
+                tempCount1 += GetPieceCount(index, currentTurn, -1, true);
+
+                tempCount2 = GetPieceCount(index, currentTurn, 1, true);
+                tempCount2 += GetPieceCount(index, currentTurn, -1, false);
+                break;
+            case ELine.Diagonal_2:
+                tempCount1 = GetPieceCount(index, currentTurn, gridCounts.x + 1, true);
+                tempCount1 += GetPieceCount(index, currentTurn, -gridCounts.x - 1, false);
+
+                tempCount2 = GetPieceCount(index, currentTurn, gridCounts.x + 1, false);
+                tempCount2 += GetPieceCount(index, currentTurn, -gridCounts.x - 1, true);
+                break;
+            default:
+                tempCount1 = 0;
+                tempCount2 = 0;
+                break;
+        }
+        return (tempCount1 > tempCount2 ? tempCount1 : tempCount2) + 1;
     }
 
     private int GetPieceCount(int index, int currentTurn, int sequential, bool allowEmpty)
@@ -231,9 +262,13 @@ public class Gomoku : MonoBehaviour
             // 빈 공간이다.
             if (pieceList.ContainsKey(currentIndex) == false)
             {
-                // 빈 공간을 허용한다면 한 번은 넘어간다.
-                if (allowEmpty) allowEmpty = false;
-                else break;
+                // 빈 공간을 허용 안 한다면 바로 값을 반환한다.
+                if (allowEmpty == false) break;
+                
+                // 빈 공간을 허용 한다면 한 번은 넘어간다.
+                allowEmpty = false;
+                currentIndex += sequential;
+                continue;
             }
 
             // 상대 오목알이 나오면 즉시 멈춘다.
