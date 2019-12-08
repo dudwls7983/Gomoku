@@ -52,8 +52,17 @@ public class GomokuAgent : Agent
             return;
 
         Gomoku gomoku = Gomoku.Instance;
-        if (gomoku == null || gomoku.pieceList.Count == gomoku.gridCounts.x * gomoku.gridCounts.y)
+        if (gomoku == null)
             return;
+
+        if(gomoku.pieceList.Count == gomoku.gridCounts.x * gomoku.gridCounts.y)
+        {
+            gomoku.RestartBoard();
+            return;
+        }
+
+        // 턴 소모에 따른 부정적인 보상
+        AddReward(-0.05f);
 
         int cellIndex = Mathf.RoundToInt(vectorAction[0]);
         if (cellIndex < 0 && cellIndex >= (gomoku.gridCounts.x * gomoku.gridCounts.y))
@@ -61,31 +70,29 @@ public class GomokuAgent : Agent
 
         if (gomoku.pieceList.ContainsKey(cellIndex))
             return;
-
-        float reward;
-        if(gomoku.TestCanPlace(cellIndex, out reward))
+        
+        if(gomoku.TestCanPlace(cellIndex, out int reward))
         {
             if(gomoku.PlacePeace(cellIndex))
             {
                 Debug.Log((pieceType == EPiece.Black ? "Black" : "White") + " Win!");
                 Done();
                 AddReward(1.0f);
-                targetAgent.AddReward(-1.0f);
+                //targetAgent.AddReward(-1.0f);
             }
             else
             {
                 int x = cellIndex % gomoku.gridCounts.x;
                 int y = cellIndex / gomoku.gridCounts.x;
 
-                // 중앙에 가깝게 놓을수록 긍정적인 보상
-                if ((x >= 5 && x <= 9) || (y >= 5 && y <= 9))
-                {
-                    AddReward(1f);
-                }
                 // 연속된 돌을 놓는 것에대한 긍정적인 보상
-                AddReward(reward * reward);
-                // 시간의 소모에 따른 부정적인 보상
-                AddReward(-0.1f);
+                if (reward >= 3) AddReward(0.02f);
+                if (reward >= 4) AddReward(0.08f);
+
+                // 상대 연속된 돌을 막는 것에대한 긍정적인 보상
+                int reward2 = gomoku.GetPreventReward(cellIndex);
+                if (reward2 >= 3) AddReward(0.01f);
+                if (reward2 >= 4) AddReward(0.04f);
             }
         }
     }
