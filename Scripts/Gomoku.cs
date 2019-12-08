@@ -53,7 +53,7 @@ public class Gomoku : MonoBehaviour
     public int CurrentTurn
     {
         get { return _currentTurn; }
-        set { _currentTurn = value % 2; }
+        set { _currentTurn = value & 1; }
     }
     private int _currentTurn = 0;
 
@@ -74,8 +74,7 @@ public class Gomoku : MonoBehaviour
     // Start is called before the first frame update
     void Start()
     {
-        CurrentTurn = 0;
-        blackAgent.RequestDecision();
+        RestartBoard();
     }
 
 
@@ -127,11 +126,15 @@ public class Gomoku : MonoBehaviour
                     // 규칙에 의해 놓을수 없는 지점인지 체크한다.
                     if (TestCanPlace(gridIndex) == false)
                         return;
+
+                    Debug.Log(GetPreventReward(gridIndex));
                     
                     // 게임의 끝났는지 결정한다.
                     if(PlacePeace(gridIndex) == true)
                     {
                         Debug.Log("Game End");
+
+                        Invoke("RestartBoard", 1.0f);
                         return;
                     }
                 }
@@ -150,24 +153,26 @@ public class Gomoku : MonoBehaviour
         var piece = go.GetComponent<Piece>() ?? go.AddComponent<Piece>();
         piece.SetPieceData((EPiece)CurrentTurn);
 
-        // 턴을 넘긴다.
-        CurrentTurn++;
-
         // 인덱스로부터 Piece 정보를 저장한다.
         pieceList.Add(index, piece);
 
-        return TestWinner(index, CurrentTurn);
+        // 승자 판단
+        bool result = TestWinner(index, CurrentTurn);
+
+        // 턴을 넘긴다.
+        CurrentTurn++;
+
+        return result;
     }
 
     public bool TestCanPlace(int index)
     {
-        float reward;
-        return TestCanPlace(index, out reward);
+        return TestCanPlace(index, out int reward);
     }
 
-    public bool TestCanPlace(int index, out float reward)
+    public bool TestCanPlace(int index, out int reward)
     {
-        reward = 0f;
+        reward = 0;
         // 렌주룰에 따르면 흑은 33, 44, 6목에 착수가 불가능하다.
         if (CurrentTurn == Black)
         {
@@ -185,7 +190,7 @@ public class Gomoku : MonoBehaviour
             {
                 // 각 라인의 열린 돌의 갯수 파악
                 int count = GetPieceCountAllowEmpty(index, CurrentTurn, (ELine)i);
-                reward = 0.1f * count;
+                if(count > reward) reward = count;
 
                 // 43은 되지만 33, 44는 방지한다.
                 if (count >= 3 && count <= 4)
@@ -198,6 +203,17 @@ public class Gomoku : MonoBehaviour
         return true;
     }
 
+    public int GetPreventReward(int index)
+    {
+        int highestReward = 0;
+        for (int i = 0; i < (int)ELine.Max; i++)
+        {
+            int count = GetPieceCountAllowEmpty(index, (CurrentTurn + 1) & 1, (ELine)i);
+            if (count > highestReward) highestReward = count;
+        }
+        return highestReward;
+    }
+
     public void RestartBoard()
     {
         foreach (var gameObject in pieceList.Values)
@@ -206,6 +222,7 @@ public class Gomoku : MonoBehaviour
         }
         pieceList.Clear();
         CurrentTurn = Black;
+        PlacePeace(gridCounts.x * gridCounts.y / 2);
     }
 
     /// <summary>
@@ -313,6 +330,10 @@ public class Gomoku : MonoBehaviour
         int currentIndex = index + sequential;
         while (IsValidIndex(currentIndex))
         {
+            // 라인이 넘어가는 경우는 닫힌걸로 판단한다.
+            if ((sequential == 1 && currentIndex % 15 == 0) || (sequential == -1 && currentIndex % 15 == 14))
+                return count;
+                
             // 빈 공간이다.
             if (pieceList.ContainsKey(currentIndex) == false)
             {
